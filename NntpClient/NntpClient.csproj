@@ -47,6 +47,7 @@
     <Compile Include="ConnectionResult.cs" />
     <Compile Include="Crc32.cs" />
     <Compile Include="Group.cs" />
+    <Compile Include="NntpClientEventArgs.cs" />
     <Compile Include="Nzb\NzbDocument.cs" />
     <Compile Include="Nzb\NzbFile.cs" />
     <Compile Include="Nzb\NzbSegment.cs" />

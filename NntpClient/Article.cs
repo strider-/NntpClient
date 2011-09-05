@@ -11,7 +11,7 @@ namespace NntpClient {
     public class Article {       
         internal Article() { }
         /// <summary>
-        /// Saves the article body to the specified path, using the filename & binary part number in the final location.
+        /// Saves the article body to the specified path, using the filename &amp; binary part number in the final location.
         /// </summary>
         /// <param name="path">Directory to store the article in</param>
         /// <returns></returns>

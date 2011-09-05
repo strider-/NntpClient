@@ -7,10 +7,12 @@ using System.IO;
 using System.Net.Security;
 using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Diagnostics;
+using System.Reflection;
 
 namespace NntpClient {
     /// <summary>
-    /// Connects & performs operations on a usenet server.
+    /// Connects &amp; performs operations on a usenet server.
     /// </summary>
     public class Client : IDisposable {
         const string PATTERN_YENC_HEADER = @"part=(?<part>\d*)\sline=(?<line>\d*)\ssize=(?<size>\d*)\sname=(?<name>.*)";
@@ -20,6 +22,11 @@ namespace NntpClient {
         StreamReader sr;
         StreamWriter sw;
         Encoding enc;
+
+        /// <summary>
+        /// Fired when the server responds with an error
+        /// </summary>
+        public event EventHandler<NntpClientEventArgs> Error = delegate { };
 
         /// <summary>
         /// Creates a new intance of the client.
@@ -50,12 +57,10 @@ namespace NntpClient {
             sw.AutoFlush = true;
 
             var reply = ServerReply.Parse(ReadLine());
-            if(!reply.IsGood)
-                throw new Exception(reply.Message);
-            Connected = true;
+            Connected = reply.IsGood;
         }
         /// <summary>
-        /// Closes the connection & returns the statistics of the session.
+        /// Closes the connection &amp; returns the statistics of the session.
         /// </summary>
         /// <returns></returns>
         public ConnectionResult Close() {
@@ -63,18 +68,13 @@ namespace NntpClient {
                 string msg = WriteLine("QUIT").Message;
                 var result = ConnectionResult.Parse(msg);
 
-                sr.Close();
-                sr = null;
-                sw.Close();
-                sw = null;
-
-                Connected = false;
+                CleanUp();
                 return result;
             }
             return null;
         }
         /// <summary>
-        /// Closes the connection & disposes of managed resources.
+        /// Closes the connection &amp; disposes of managed resources.
         /// </summary>
         public void Dispose() {
             Close();
@@ -86,15 +86,14 @@ namespace NntpClient {
         /// <param name="pass">Usenet password</param>
         /// <returns></returns>
         public void Authenticate(string user, string pass) {
-            ServerReply result;
+            WriteLine("AUTHINFO USER {0}", user);            
+            var result = WriteLine("AUTHINFO PASS {0}", pass);
+            
+            if(result.IsGood) {
+                SetMode("READER");
+            }
 
-            result = WriteLine("AUTHINFO USER {0}", user);
-            result = WriteLine("AUTHINFO PASS {0}", pass);
-
-            if(!result.IsGood)
-                throw new Exception(result.Message);
-
-            result = WriteLine("MODE READER");
+            Authenticated = result.IsGood;
         }
         /// <summary>
         /// Returns a collection of available usenet groups.
@@ -104,7 +103,7 @@ namespace NntpClient {
             var groups = new List<Group>();
             string group;
 
-            WriteLine("LIST");
+            var reply = WriteLine("LIST");
 
             while((group = ReadLine()) != ".") {
                 groups.Add(Group.Parse(group));
@@ -144,11 +143,11 @@ namespace NntpClient {
             var dict = new Dictionary<string, string>();
             var result = WriteLine("HEAD <{0}>", articleId.Trim('<', '>'));
 
-            if(!result.IsGood) {
-                throw new Exception(result.Message);
+            if(result.IsGood) {
+                return ReadHeader();
             }
 
-            return ReadHeader();
+            return null;
         }
         /// <summary>
         /// Downloads an article from usenet with the given ID.
@@ -159,36 +158,38 @@ namespace NntpClient {
             var result = WriteLine("ARTICLE <{0}>", articleId.Trim('<', '>'));
             string line = null;
 
-            if(!result.IsGood)
-                throw new Exception(result.Message);
+            if(result.IsGood) {
+                var dict = ReadHeader();
 
-            var dict = ReadHeader();
-            string yEncHeader = string.Empty;
-            while((yEncHeader = ReadLine()) == string.Empty)
-                ;
+                string yEncHeader = string.Empty;
+                while((yEncHeader = ReadLine()) == string.Empty)
+                    ;
 
-            var m = Regex.Match(yEncHeader, PATTERN_YENC_HEADER, RegexOptions.Singleline | RegexOptions.Compiled);
-            MemoryStream ms = new MemoryStream();
-            while(!(line = ReadLine()).StartsWith("=yend")) {
-                YEncDecode(line, ms);
+                var m = Regex.Match(yEncHeader, PATTERN_YENC_HEADER, RegexOptions.Singleline | RegexOptions.Compiled);
+                MemoryStream ms = new MemoryStream();
+                while(!(line = ReadLine()).StartsWith("=yend")) {
+                    YEncDecode(line, ms);
+                }
+                ms.Position = 0;
+
+                Crc32 crc = new Crc32();
+                string expectedHash = line.Substring(line.IndexOf("pcrc32")).Split('=')[1];
+                string crcHash = string.Empty;
+                crcHash = crc.ComputeHash(ms).Aggregate(crcHash, (a, c) => a += c.ToString("x2"));
+                ms.Position = 0;
+                ReadLine();
+
+                return new Article {
+                    Headers = dict,
+                    Body = ms,
+                    Filename = m.Groups["name"].Value,
+                    Part = int.Parse(m.Groups["part"].Value),
+                    ExpectedCrc32 = expectedHash,
+                    ActualCrc32 = crcHash
+                };
             }
-            ms.Position = 0;
 
-            Crc32 crc = new Crc32();
-            string expectedHash = line.Substring(line.IndexOf("pcrc32")).Split('=')[1];
-            string crcHash = string.Empty;
-            crcHash = crc.ComputeHash(ms).Aggregate(crcHash, (a, c) => a += c.ToString("x2"));
-            ms.Position = 0;
-            ReadLine();
-
-            return new Article {
-                Headers = dict,
-                Body = ms,
-                Filename = m.Groups["name"].Value,
-                Part = int.Parse(m.Groups["part"].Value),
-                ExpectedCrc32 = expectedHash,
-                ActualCrc32 = crcHash
-            };
+            return null;
         }
         /// <summary>
         /// Gets the current UTC date/time on the server.
@@ -196,19 +197,55 @@ namespace NntpClient {
         /// <returns></returns>
         public DateTime Date() {
             var reply = WriteLine("DATE");
-            return DateTime.ParseExact(reply.Message, "yyyyMMddHHmmss", CultureInfo.CurrentCulture);
+            if(reply.IsGood) {
+                return DateTime.ParseExact(reply.Message, "yyyyMMddHHmmss", CultureInfo.CurrentCulture);
+            }
+            return new DateTime();
         }
 
+        private void CleanUp() {
+            if(sr != null && sw != null) {
+                sr.Close();
+                sr = null;
+                sw.Close();
+                sw = null;
+            }
+            Connected = false;
+            Authenticated = false;
+        }
+        private void SetMode(string mode) {
+            WriteLine("MODE {0}", mode);
+        }
+        private void HandleReply(ServerReply reply) {
+            if(!reply.IsGood) {
+                Error(this, new NntpClientEventArgs(reply));
+            }
+        }
         private string ReadLine() {
-            return sr.ReadLine();
+            try {
+                return sr.ReadLine();
+            } catch(IOException) {
+                CleanUp();
+                return null;
+            } 
         }
         private ServerReply WriteLine(string line, params object[] args) {
-            if(!Connected)
-                throw new Exception("A connection to the server is not available.");
+            if(Connected) {
+                try {
+                    sw.WriteLine(line, args);
+                    string result = ReadLine();
+                    if(result != null) {
+                        var reply = ServerReply.Parse(result);
+                        HandleReply(reply);
+                        return reply;
+                    }
+                } catch(IOException) {
 
-            sw.WriteLine(line, args);
-            string result = ReadLine();
-            return ServerReply.Parse(result);
+                }
+            }
+
+            CleanUp();
+            return ServerReply.Parse("000 Connection is no longer available.");
         }
         private Dictionary<string, string> ReadHeader() {
             var dict = new Dictionary<string, string>();
@@ -243,6 +280,10 @@ namespace NntpClient {
             destination.Write(decoded, 0, length);
         }
 
+        /// <summary>
+        /// Gets whether or not the client has been authenticated.
+        /// </summary>
+        public bool Authenticated { get; private set; }
         /// <summary>
         /// Gets whether or not the client is currently connected to a server.
         /// </summary>
