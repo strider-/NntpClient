@@ -47,12 +47,16 @@
     <Compile Include="Client.cs" />
     <Compile Include="ConnectionResult.cs" />
     <Compile Include="Crc32.cs" />
+    <Compile Include="EventArgs\DownloadProgressEventArgs.cs" />
+    <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Group.cs" />
     <Compile Include="EventArgs\NntpClientEventArgs.cs" />
     <Compile Include="Nzb\NzbDocument.cs" />
     <Compile Include="Nzb\NzbFile.cs" />
     <Compile Include="Nzb\NzbSegment.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Queue\DownloadQueue.cs" />
+    <Compile Include="Queue\QueueItem.cs" />
     <Compile Include="ServerReply.cs" />
   </ItemGroup>
   <ItemGroup />

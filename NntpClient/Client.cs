@@ -10,24 +10,30 @@ using System.Globalization;
 using System.Diagnostics;
 using System.Reflection;
 using NntpClient.EventArgs;
+using NntpClient.Extensions;
 
 namespace NntpClient {
     /// <summary>
     /// Connects &amp; performs operations on a usenet server.
     /// </summary>
     public class Client : IDisposable {
-        const string PATTERN_YENC_HEADER = @"part=(?<part>\d*)\sline=(?<line>\d*)\ssize=(?<size>\d*)\sname=(?<name>.*)";
+        const string PATTERN_YENC_HEADER = @"(?<key>[A-z0-9]+)=(?<value>.*?)(?:\s|$)";
 
         byte[] buffer;
         TcpClient client;
         StreamReader sr;
         StreamWriter sw;
         Encoding enc;
+        string peekedLine;
         
         /// <summary>
         /// Fired when an article could not be found on the server
         /// </summary>
         public event EventHandler<ArticleNotFoundEventArgs> ArticleNotFound = delegate { };
+        /// <summary>
+        /// Fired when a chunk of data has been downloaded from usenet
+        /// </summary>
+        public event EventHandler<DownloadProgressEventArgs> DownloadedChunk = delegate { };
 
         /// <summary>
         /// Creates a new intance of the client.
@@ -162,21 +168,28 @@ namespace NntpClient {
             string line = null;
 
             if(result.IsGood) {
-                var dict = ReadHeader();
+                var dict = ReadHeader();                
+                var yHeaderDict = ReadYEncHeader();
+                int size = 0, total = 1;
 
-                string yEncHeader = string.Empty;
-                while((yEncHeader = ReadLine()) == string.Empty)
-                    ;
+                if(yHeaderDict.ContainsKey("begin") && yHeaderDict.ContainsKey("end")) {
+                    size = (yHeaderDict["end"].AsInt32() - yHeaderDict["begin"].AsInt32()) + 1;
+                }
 
-                var m = Regex.Match(yEncHeader, PATTERN_YENC_HEADER, RegexOptions.Singleline | RegexOptions.Compiled);
+                if(yHeaderDict.ContainsKey("total")) {
+                    total = yHeaderDict["total"].AsInt32();
+                }
+
                 MemoryStream ms = new MemoryStream();
                 while(!(line = ReadLine()).StartsWith("=yend")) {
                     YEncDecode(line, ms);
+                    DownloadedChunk(this, new DownloadProgressEventArgs(ms.Length, size));
                 }
                 ms.Position = 0;
 
                 Crc32 crc = new Crc32();
-                string expectedHash = line.Substring(line.IndexOf("pcrc32")).Split('=')[1];
+                var yFooterDict = ParseYEncKeywordLine(line);
+                string expectedHash = yFooterDict["pcrc32"];
                 string crcHash = string.Empty;
                 crcHash = crc.ComputeHash(ms).Aggregate(crcHash, (a, c) => a += c.ToString("x2"));
                 ms.Position = 0;
@@ -185,8 +198,9 @@ namespace NntpClient {
                 return new Article {
                     Headers = dict,
                     Body = ms,
-                    Filename = m.Groups["name"].Value,
-                    Part = int.Parse(m.Groups["part"].Value),
+                    Filename = yHeaderDict["name"],
+                    Part = yHeaderDict["part"].AsInt32(),
+                    TotalParts = total,
                     ExpectedCrc32 = expectedHash,
                     ActualCrc32 = crcHash
                 };
@@ -207,12 +221,34 @@ namespace NntpClient {
             return new DateTime();
         }
 
-        private void CleanUp() {
+        private Dictionary<string, string> ReadYEncHeader() {
+            string ybegin = string.Empty, ypart = string.Empty;
+            List<Dictionary<string, string>> dicts = new List<Dictionary<string, string>>();
+
+            if(PeekLine() == string.Empty)
+                ReadLine();
+            
+            ybegin = ReadLine();
+            dicts.Add(ParseYEncKeywordLine(ybegin));
+
+            if(PeekLine().StartsWith("=ypart")) {
+                ypart = ReadLine();
+                dicts.Add(ParseYEncKeywordLine(ypart));
+            }
+
+            return dicts.SelectMany(d => d).ToDictionary(k => k.Key, v => v.Value);
+        }
+        private Dictionary<string, string> ParseYEncKeywordLine(string header) {
+            var mc = Regex.Matches(header, PATTERN_YENC_HEADER, RegexOptions.Singleline | RegexOptions.Compiled | RegexOptions.RightToLeft);
+            return mc.OfType<Match>().ToDictionary(k => k.Groups["key"].Value, v => v.Groups["value"].Value);
+        }
+        private void CleanUp() {            
             if(sr != null && sw != null) {
                 sr.Close();
                 sr = null;
                 sw.Close();
                 sw = null;
+                client.Close();
             }
             Connected = false;
             Authenticated = false;
@@ -221,7 +257,12 @@ namespace NntpClient {
             WriteLine("MODE {0}", mode);
         }
         private string ReadLine() {
-            return sr.ReadLine();
+            string line = peekedLine ?? sr.ReadLine();
+            peekedLine = null;
+            return line;
+        }
+        private string PeekLine() {
+            return peekedLine = sr.ReadLine();
         }
         private ServerReply WriteLine(string line, params object[] args) {
             sw.WriteLine(line, args);
@@ -242,10 +283,6 @@ namespace NntpClient {
             return dict;
         }
         private void YEncDecode(string line, Stream destination) {
-            if(line.StartsWith("=ypart")) {
-                return;
-            }
-
             byte[] raw = enc.GetBytes(line);
             byte[] decoded = new byte[line.Length];
             int length = 0;

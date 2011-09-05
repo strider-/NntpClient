@@ -39,9 +39,13 @@ namespace NntpClient {
         /// </summary>
         public string Filename { get; internal set; }
         /// <summary>
-        /// Gets the part number of this article
+        /// Gets the part number of this file segment
         /// </summary>
         public int Part { get; internal set; }
+        /// <summary>
+        /// Gets the total number of parts the file was split over
+        /// </summary>
+        public int TotalParts { get; internal set; }
         /// <summary>
         /// Gets whether or not the hashed CRC32 value matches the expected value.
         /// </summary>
