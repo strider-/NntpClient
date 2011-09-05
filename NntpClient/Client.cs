@@ -49,7 +49,9 @@ namespace NntpClient {
             sw = new StreamWriter(stream, enc);
             sw.AutoFlush = true;
 
-            ReadLine();
+            var reply = ServerReply.Parse(ReadLine());
+            if(!reply.IsGood)
+                throw new Exception(reply.Message);
             Connected = true;
         }
         /// <summary>
@@ -83,17 +85,16 @@ namespace NntpClient {
         /// <param name="user">Usenet username</param>
         /// <param name="pass">Usenet password</param>
         /// <returns></returns>
-        public bool Authenticate(string user, string pass) {
+        public void Authenticate(string user, string pass) {
             ServerReply result;
 
             result = WriteLine("AUTHINFO USER {0}", user);
             result = WriteLine("AUTHINFO PASS {0}", pass);
 
-            if(result.IsGood) {
-                result = WriteLine("MODE READER");
-            }
+            if(!result.IsGood)
+                throw new Exception(result.Message);
 
-            return result.IsGood;
+            result = WriteLine("MODE READER");
         }
         /// <summary>
         /// Returns a collection of available usenet groups.
