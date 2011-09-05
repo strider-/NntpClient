@@ -17,6 +17,7 @@ namespace NntpClient.Nzb {
         /// <param name="Uri">path to the nzb document</param>
         public NzbDocument(string Uri) {
             var validDoc = Validate(XDocument.Load(Uri));
+            Name = Path.GetFileNameWithoutExtension(Uri);
             Parse(validDoc);
         }
 
@@ -43,7 +44,10 @@ namespace NntpClient.Nzb {
             Files = nzb.Root.Elements(ns + "file")
                 .Select(e => new NzbFile(e, ns)).AsEnumerable();
         }
-
+        /// <summary>
+        /// Gets the name of the NZB
+        /// </summary>
+        public string Name { get; private set; }
         /// <summary>
         /// Gets any metadata contained in the nzb
         /// </summary>

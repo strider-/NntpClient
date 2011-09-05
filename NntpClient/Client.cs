@@ -180,10 +180,13 @@ namespace NntpClient {
                     total = yHeaderDict["total"].AsInt32();
                 }
 
+                string name = yHeaderDict["name"];
+                int part = yHeaderDict["part"].AsInt32();
+
                 MemoryStream ms = new MemoryStream();
                 while(!(line = ReadLine()).StartsWith("=yend")) {
                     YEncDecode(line, ms);
-                    DownloadedChunk(this, new DownloadProgressEventArgs(ms.Length, size));
+                    DownloadedChunk(this, new DownloadProgressEventArgs(ms.Length, size, name, part, total));
                 }
                 ms.Position = 0;
 
@@ -198,8 +201,8 @@ namespace NntpClient {
                 return new Article {
                     Headers = dict,
                     Body = ms,
-                    Filename = yHeaderDict["name"],
-                    Part = yHeaderDict["part"].AsInt32(),
+                    Filename = name,
+                    Part = part,
                     TotalParts = total,
                     ExpectedCrc32 = expectedHash,
                     ActualCrc32 = crcHash

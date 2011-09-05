@@ -20,6 +20,10 @@ namespace NntpClient.Nzb {
             Segments = e.Element(n + "segments").Elements(n + "segment").Select(s => new NzbSegment(s)).AsEnumerable();
         }
 
+        /// <summary>
+        /// Provides a unique code for hashing
+        /// </summary>
+        /// <returns></returns>
         public override int GetHashCode() {
             return Poster.GetHashCode() ^
                 Date.GetHashCode() ^

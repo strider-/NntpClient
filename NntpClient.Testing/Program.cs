@@ -5,6 +5,8 @@ using System.Text;
 using System.Configuration;
 using NntpClient.Nzb;
 using NntpClient.Queue;
+using System.IO;
+using System.Net.Sockets;
 
 namespace NntpClient.Testing {
     class Program {
@@ -15,24 +17,33 @@ namespace NntpClient.Testing {
                    pass = settings["NntpPass"];
             int port = int.Parse(settings["NntpPort"]);
 
-            
+            NzbDocument nzb = new NzbDocument(settings["NntpNzb"]);
+            DownloadQueue queue = new DownloadQueue(nzb, settings["NntpCachePath"], settings["NntpCompletedPath"]);
+
+            queue.FileCompleted += (s, e) => {
+                Console.WriteLine("File Completed ({0})", Path.GetFileName(e.Filename));
+            };
+
+            queue.QueueCompleted += (s, e) => {
+                Console.WriteLine("Queue Completed");
+            };
+
             using(Client nntp = new Client()) {
                 nntp.Connect(hostname, port, true);
                 nntp.Authenticate(user, pass);
                 nntp.DownloadedChunk += (s, e) => {
-                    Console.CursorLeft = 0;
-                    Console.CursorTop = 0;
-                    Console.Write("{0:P}", e.Progress);
+                    if(e.Progress == 1f) {
+                        Console.WriteLine("{0} {1}/{2}", e.Filename, e.Part, e.Total);
+                    }                    
                 };
-                var art = nntp.GetArticle("part1of1.py$UcS9lvwtFY2bhXcN9@camelsystem-powerpost.local");
-                Console.WriteLine();
-                Console.WriteLine("E-CRC: {0}", art.ExpectedCrc32);
-                Console.WriteLine("A-CRC: {0}", art.ActualCrc32);
-                Console.WriteLine("Size:  {0}", art.Body.Length);
-                Console.WriteLine("File:  {0}", art.Filename);
-                Console.WriteLine("Sgmnt: {0}/{1}", art.Part, art.TotalParts);
+
+                while(queue.HasJobs) {
+                    var item = queue.Pop();
+                    var article = nntp.GetArticle(item.ArticleId);
+                    queue.Complete(item, article);
+                }
             }
-             
+
             Console.ReadLine();
         }
     }
