@@ -14,9 +14,6 @@ namespace NntpClient.Testing {
             int port = int.Parse(settings["NntpPort"]);
 
             using(Client nntp = new Client()) {
-                nntp.Error += (s, e) => {
-                    Console.WriteLine("Error: {0} - {1}", e.Code, e.Message);
-                };
                 nntp.Connect(hostname, port, true);
                 nntp.Authenticate(user, pass);
             }

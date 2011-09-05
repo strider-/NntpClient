@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Diagnostics;
 using System.Reflection;
+using NntpClient.EventArgs;
 
 namespace NntpClient {
     /// <summary>
@@ -22,11 +23,11 @@ namespace NntpClient {
         StreamReader sr;
         StreamWriter sw;
         Encoding enc;
-
+        
         /// <summary>
-        /// Fired when the server responds with an error
+        /// Fired when an article could not be found on the server
         /// </summary>
-        public event EventHandler<NntpClientEventArgs> Error = delegate { };
+        public event EventHandler<ArticleNotFoundEventArgs> ArticleNotFound = delegate { };
 
         /// <summary>
         /// Creates a new intance of the client.
@@ -89,11 +90,12 @@ namespace NntpClient {
             WriteLine("AUTHINFO USER {0}", user);            
             var result = WriteLine("AUTHINFO PASS {0}", pass);
             
-            if(result.IsGood) {
-                SetMode("READER");
+            if(!result.IsGood) {
+                throw new Exception(result.Message);
             }
 
-            Authenticated = result.IsGood;
+            Authenticated = true;
+            SetMode("READER");
         }
         /// <summary>
         /// Returns a collection of available usenet groups.
@@ -146,11 +148,12 @@ namespace NntpClient {
             if(result.IsGood) {
                 return ReadHeader();
             }
-
+            
+            ArticleNotFound(this, new ArticleNotFoundEventArgs(result, articleId));
             return null;
         }
         /// <summary>
-        /// Downloads an article from usenet with the given ID.
+        /// Downloads an article from usenet with the given ID. Returns null if the article could not be found.
         /// </summary>
         /// <param name="articleId"></param>
         /// <returns></returns>
@@ -189,6 +192,7 @@ namespace NntpClient {
                 };
             }
 
+            ArticleNotFound(this, new ArticleNotFoundEventArgs(result, articleId));
             return null;
         }
         /// <summary>
@@ -216,36 +220,14 @@ namespace NntpClient {
         private void SetMode(string mode) {
             WriteLine("MODE {0}", mode);
         }
-        private void HandleReply(ServerReply reply) {
-            if(!reply.IsGood) {
-                Error(this, new NntpClientEventArgs(reply));
-            }
-        }
         private string ReadLine() {
-            try {
-                return sr.ReadLine();
-            } catch(IOException) {
-                CleanUp();
-                return null;
-            } 
+            return sr.ReadLine();
         }
         private ServerReply WriteLine(string line, params object[] args) {
-            if(Connected) {
-                try {
-                    sw.WriteLine(line, args);
-                    string result = ReadLine();
-                    if(result != null) {
-                        var reply = ServerReply.Parse(result);
-                        HandleReply(reply);
-                        return reply;
-                    }
-                } catch(IOException) {
-
-                }
-            }
-
-            CleanUp();
-            return ServerReply.Parse("000 Connection is no longer available.");
+            sw.WriteLine(line, args);
+            string result = ReadLine();
+            var reply = ServerReply.Parse(result);
+            return reply;
         }
         private Dictionary<string, string> ReadHeader() {
             var dict = new Dictionary<string, string>();

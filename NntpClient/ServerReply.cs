@@ -8,6 +8,9 @@ namespace NntpClient {
         internal ServerReply() { }
 
         internal static ServerReply Parse(string reply) {
+            if(reply == null)
+                return new ServerReply() { Message = "No response from server." };
+
             return new ServerReply {
                 Code = int.Parse(reply.Substring(0, 3)),
                 Message = reply.Substring(4)

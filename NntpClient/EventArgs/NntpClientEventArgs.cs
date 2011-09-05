@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace NntpClient {
+namespace NntpClient.EventArgs {
     /// <summary>
     /// Contains event data pertaining to an NNTP reply
     /// </summary>
-    public class NntpClientEventArgs : EventArgs {
+    public class NntpClientEventArgs : System.EventArgs {
         ServerReply reply;
         internal NntpClientEventArgs(ServerReply reply) {
             this.reply = reply;
