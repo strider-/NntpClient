@@ -30,8 +30,8 @@ namespace NntpClient.Queue {
         /// <param name="nzb">NzbDocument to process</param>
         /// <param name="cachePath">Location to store file segments until they can be assembled</param>
         /// <param name="completedPath">Location to store completed files.</param>
-        public DownloadQueue(NzbDocument nzb, string cachePath, string completedPath) {
-            CacheDirectory = new DirectoryInfo(cachePath);
+        public DownloadQueue(NzbDocument nzb, string cachePath, string completedPath) {            
+            CacheDirectory = new DirectoryInfo(Path.Combine(cachePath, nzb.Name));
             if(!CacheDirectory.Exists)
                 CacheDirectory.Create();
 
@@ -124,8 +124,10 @@ namespace NntpClient.Queue {
             
             assembled[FileId] = true;
             FileCompleted(this, new FileCompletedEventArgs(path, broken));
-            if(assembled.All(f => f.Value))
+            if(assembled.All(f => f.Value)) {
+                CacheDirectory.Delete(true);
                 QueueCompleted(this, System.EventArgs.Empty);
+            }
         }
 
         /// <summary>

@@ -1,12 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Configuration;
 using NntpClient.Nzb;
 using NntpClient.Queue;
 using System.IO;
-using System.Net.Sockets;
 
 namespace NntpClient.Testing {
     class Program {
@@ -28,6 +24,7 @@ namespace NntpClient.Testing {
                 Console.WriteLine("Queue Completed");
             };
 
+            ConnectionResult result;
             using(Client nntp = new Client()) {
                 nntp.Connect(hostname, port, true);
                 nntp.Authenticate(user, pass);
@@ -47,8 +44,10 @@ namespace NntpClient.Testing {
                         queue.Fail(item);
                     }
                 }
+                result = nntp.Close();
             }
-
+            Console.WriteLine("------");
+            Console.WriteLine("{0} bytes downloaded in {1} articles & {2} groups.", result.TotalBytes, result.Articles, result.Groups);
             Console.ReadLine();
         }
     }

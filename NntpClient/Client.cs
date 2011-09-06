@@ -17,7 +17,7 @@ namespace NntpClient {
     /// Connects &amp; performs operations on a usenet server.
     /// </summary>
     public class Client : IDisposable {
-        const string PATTERN_YENC_HEADER = @"(?<key>[A-z0-9]+)=(?<value>.*?)(?:\s|$)";
+        const string PATTERN_YENC_HEADER = @"(?<key>[A-z0-9]+)=(?<value>.*?)(?:\s|$)"; // specify RightToLeft for regex options
 
         byte[] buffer;
         TcpClient client;
@@ -149,7 +149,7 @@ namespace NntpClient {
         /// <returns></returns>
         public Dictionary<string, string> GetHeaders(string articleId) {
             var dict = new Dictionary<string, string>();
-            var result = WriteLine("HEAD <{0}>", articleId.Trim('<', '>'));
+            var result = WriteLine("HEAD <{0}>", articleId.WithoutBrackets());
 
             if(result.IsGood) {
                 return ReadHeader();
@@ -164,7 +164,7 @@ namespace NntpClient {
         /// <param name="articleId"></param>
         /// <returns></returns>
         public Article GetArticle(string articleId) {
-            var result = WriteLine("ARTICLE <{0}>", articleId.Trim('<', '>'));
+            var result = WriteLine("ARTICLE <{0}>", articleId.WithoutBrackets());
             string line = null;
 
             if(result.IsGood) {
@@ -224,13 +224,19 @@ namespace NntpClient {
             }
             return new DateTime();
         }
+        /// <summary>
+        /// Gets whether or not the article is available to download.
+        /// </summary>
+        /// <param name="articleId">Message-ID of the article</param>
+        /// <returns></returns>
+        public bool ArticleExists(string articleId) {
+            var result = WriteLine("STAT <{0}>", articleId.WithoutBrackets());
+            return result.IsGood;
+        }
 
         private Dictionary<string, string> ReadYEncHeader() {
             string ybegin = string.Empty, ypart = string.Empty;
             List<Dictionary<string, string>> dicts = new List<Dictionary<string, string>>();
-
-            if(PeekLine() == string.Empty)
-                ReadLine();
             
             ybegin = ReadLine();
             dicts.Add(ParseYEncKeywordLine(ybegin));
@@ -266,7 +272,7 @@ namespace NntpClient {
             return line;
         }
         private string PeekLine() {
-            return peekedLine = sr.ReadLine();
+            return peekedLine ?? (peekedLine = sr.ReadLine());
         }
         private ServerReply WriteLine(string line, params object[] args) {
             sw.WriteLine(line, args);
@@ -282,6 +288,12 @@ namespace NntpClient {
                 string key = header.Substring(0, header.IndexOf(':'));
                 string value = header.Substring(header.IndexOf(':') + 1);
                 dict[key] = value.Trim();
+            }
+
+            if(header == string.Empty) {
+                // some messages have more than 1 blank line between the headers & body, go figure
+                while(PeekLine() == string.Empty)
+                    ReadLine();
             }
 
             return dict;

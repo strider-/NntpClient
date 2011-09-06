@@ -18,5 +18,13 @@ namespace NntpClient.Extensions {
             int.TryParse(str, out val);
             return val;
         }
+        /// <summary>
+        /// Trims angled brackets from the start and end of a string.
+        /// </summary>
+        /// <param name="str"></param>
+        /// <returns></returns>
+        public static string WithoutBrackets(this string str) {
+            return str.Trim('<', '>');
+        }
     }
 }
