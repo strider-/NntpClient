@@ -28,6 +28,8 @@ namespace NntpClient.Queue {
         /// Gets the status of the job
         /// </summary>
         public JobStatus Status { get; internal set; }
+
+        internal int ByteOffset { get; set; }
         internal string Filename { get; set; }
         internal string CacheLocation { get; set; }
     }

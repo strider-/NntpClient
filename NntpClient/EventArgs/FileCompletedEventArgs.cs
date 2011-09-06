@@ -8,12 +8,17 @@ namespace NntpClient.EventArgs {
     /// Represents a file that has been downloaded from usenet &amp; reassembled.
     /// </summary>
     public class FileCompletedEventArgs : System.EventArgs {
-        internal FileCompletedEventArgs(string path) {
+        internal FileCompletedEventArgs(string path, bool broke) {
             Filename = path;
+            IsBroken = broke;
         }
         /// <summary>
         /// Gets the location of the completed file.
         /// </summary>
         public string Filename { get; internal set; }
+        /// <summary>
+        /// Gets whether or not all articles were processed successfully.
+        /// </summary>
+        public bool IsBroken { get; internal set; }
     }
 }

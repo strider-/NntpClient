@@ -46,9 +46,7 @@ namespace NntpClient.Queue {
                     Number = s.Number,
                     Total = f.Segments.Count(),
                     ArticleId = s.ArticleId,
-                    Status = JobStatus.Queued,
-                    Filename = null,
-                    CacheLocation = null
+                    Status = JobStatus.Queued                   
                 }
             ).ToList();
 
@@ -81,6 +79,7 @@ namespace NntpClient.Queue {
             job.Status = JobStatus.Complete;
             job.Filename = article.Filename;
             job.CacheLocation = article.Store(CacheDirectory.FullName);
+            job.ByteOffset = article.Start;
 
             if(FileDownloaded(job.FileID) && !assembled[job.FileID]) {
                 lock(padLock) {
@@ -90,26 +89,41 @@ namespace NntpClient.Queue {
                 }
             }
         }
+        /// <summary>
+        /// Marks a job as failed
+        /// </summary>
+        /// <param name="job"></param>
+        public void Fail(Job job) {
+            job.Status = JobStatus.Failed;
+        }
 
         private bool FileDownloaded(int FileId) {
-            return queue.Where(q => q.FileID == FileId).All(q => q.Status == JobStatus.Complete);
+            return queue.Where(q => q.FileID == FileId).All(q => q.Status == JobStatus.Complete || q.Status == JobStatus.Failed);
         }
         private void AssembleFile(int FileId) {
             var segments = queue.Where(q => q.FileID == FileId).OrderBy(q => q.Number);            
             string filename = segments.First().Filename;
+            bool broken = segments.Any(s => s.Status == JobStatus.Failed);
+            
+            if(broken) {
+                filename = filename.ToUpper();
+            }
+            
             string path = Path.Combine(CompletedDirectory.FullName, filename);
-
             using(FileStream file = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None)) {
                 foreach(var segment in segments) {
-                    using(FileStream part = new FileStream(segment.CacheLocation, FileMode.Open, FileAccess.Read, FileShare.None)) {
-                        part.CopyTo(file);
+                    if(segment.Status == JobStatus.Complete) {
+                        using(FileStream part = new FileStream(segment.CacheLocation, FileMode.Open, FileAccess.Read, FileShare.None)) {
+                            file.Position = segment.ByteOffset;
+                            part.CopyTo(file);
+                        }
+                        File.Delete(segment.CacheLocation);
                     }
-                    File.Delete(segment.CacheLocation);
                 }
             }
-
+            
             assembled[FileId] = true;
-            FileCompleted(this, new FileCompletedEventArgs(path));
+            FileCompleted(this, new FileCompletedEventArgs(path, broken));
             if(assembled.All(f => f.Value))
                 QueueCompleted(this, System.EventArgs.Empty);
         }

@@ -205,7 +205,8 @@ namespace NntpClient {
                     Part = part,
                     TotalParts = total,
                     ExpectedCrc32 = expectedHash,
-                    ActualCrc32 = crcHash
+                    ActualCrc32 = crcHash,
+                    Start = yHeaderDict["begin"].AsInt32() - 1
                 };
             }
 

@@ -40,7 +40,12 @@ namespace NntpClient.Testing {
                 while(queue.HasJobs) {
                     var item = queue.Pop();
                     var article = nntp.GetArticle(item.ArticleId);
-                    queue.Complete(item, article);
+
+                    if(article != null) {
+                        queue.Complete(item, article);
+                    } else {
+                        queue.Fail(item);
+                    }
                 }
             }
 

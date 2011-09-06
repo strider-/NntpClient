@@ -19,6 +19,10 @@ namespace NntpClient.Queue {
         /// <summary>
         /// Job has been completed, article was downloaded.
         /// </summary>
-        Complete
+        Complete,
+        /// <summary>
+        /// Job failed processing.
+        /// </summary>
+        Failed
     }
 }

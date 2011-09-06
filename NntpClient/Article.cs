@@ -58,5 +58,9 @@ namespace NntpClient {
         /// Gets the hashed CRC32 value of the article body
         /// </summary>
         public string ActualCrc32 { get; internal set; }
+        /// <summary>
+        /// Gets the offset where this chunk of data starts in the assembled file
+        /// </summary>
+        public int Start { get; internal set; }
     }
 }
