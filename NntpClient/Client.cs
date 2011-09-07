@@ -12,6 +12,9 @@ using System.Reflection;
 using NntpClient.EventArgs;
 using NntpClient.Extensions;
 
+// TODO: refactor stream read/write into separate class
+// TODO: refactor decoding methods into an interface
+
 namespace NntpClient {
     /// <summary>
     /// Connects &amp; performs operations on a usenet server.
@@ -19,7 +22,6 @@ namespace NntpClient {
     public class Client : IDisposable {
         const string PATTERN_YENC_HEADER = @"(?<key>[A-z0-9]+)=(?<value>.*?)(?:\s|$)"; // specify RightToLeft for regex options
 
-        byte[] buffer;
         TcpClient client;
         StreamReader sr;
         StreamWriter sw;
@@ -51,7 +53,6 @@ namespace NntpClient {
         public void Connect(string hostname, int port, bool ssl) {            
             client.Connect(hostname, port);
             Stream stream = client.GetStream();
-            buffer = new byte[0x8000];
             
             if(ssl) {
                 SslStream sslStream = new SslStream(client.GetStream(), true);
@@ -179,7 +180,7 @@ namespace NntpClient {
                 if(yHeaderDict.ContainsKey("total")) {
                     total = yHeaderDict["total"].AsInt32();
                 }
-
+                
                 string name = yHeaderDict["name"];
                 int part = yHeaderDict["part"].AsInt32();
 

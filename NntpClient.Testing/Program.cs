@@ -19,7 +19,7 @@ namespace NntpClient.Testing {
             queue.FileCompleted += (s, e) => {
                 Console.WriteLine("File Completed ({0})", Path.GetFileName(e.Filename));
             };
-
+            
             queue.QueueCompleted += (s, e) => {
                 Console.WriteLine("Queue Completed");
             };

@@ -46,7 +46,7 @@ namespace NntpClient.Queue {
                     Number = s.Number,
                     Total = f.Segments.Count(),
                     ArticleId = s.ArticleId,
-                    Status = JobStatus.Queued                   
+                    Status = JobStatus.Queued
                 }
             ).ToList();
 
@@ -114,7 +114,9 @@ namespace NntpClient.Queue {
                 foreach(var segment in segments) {
                     if(segment.Status == JobStatus.Complete) {
                         using(FileStream part = new FileStream(segment.CacheLocation, FileMode.Open, FileAccess.Read, FileShare.None)) {
-                            file.Position = segment.ByteOffset;
+                            if(segment.ByteOffset > -1) {
+                                file.Position = segment.ByteOffset;
+                            }
                             part.CopyTo(file);
                         }
                         File.Delete(segment.CacheLocation);
