@@ -11,22 +11,16 @@ using System.Diagnostics;
 using System.Reflection;
 using NntpClient.EventArgs;
 using NntpClient.Extensions;
-
-// TODO: refactor stream read/write into separate class
-// TODO: refactor decoding methods into an interface
+using NntpClient.Decoders;
 
 namespace NntpClient {
     /// <summary>
     /// Connects &amp; performs operations on a usenet server.
     /// </summary>
-    public class Client : IDisposable {
-        const string PATTERN_YENC_HEADER = @"(?<key>[A-z0-9]+)=(?<value>.*?)(?:\s|$)"; // specify RightToLeft for regex options
-
+    public class Client : IDisposable {        
         TcpClient client;
         StreamReader sr;
         StreamWriter sw;
-        Encoding enc;
-        string peekedLine;
         
         /// <summary>
         /// Fired when an article could not be found on the server
@@ -41,8 +35,7 @@ namespace NntpClient {
         /// Creates a new intance of the client.
         /// </summary>
         public Client() {
-            client = new TcpClient();
-            enc = Encoding.GetEncoding(1252);
+            client = new TcpClient();            
         }
         /// <summary>
         /// Opens a connection to the given usenet server on the specified port, and whether or not to use ssl.
@@ -60,6 +53,7 @@ namespace NntpClient {
                 stream = sslStream;
             }
 
+            var enc = Encoding.GetEncoding(1252);
             sr = new StreamReader(stream, enc);
             sw = new StreamWriter(stream, enc);
             sw.AutoFlush = true;
@@ -94,9 +88,12 @@ namespace NntpClient {
         /// <param name="pass">Usenet password</param>
         /// <returns></returns>
         public void Authenticate(string user, string pass) {
-            WriteLine("AUTHINFO USER {0}", user);            
-            var result = WriteLine("AUTHINFO PASS {0}", pass);
+            var result = WriteLine("AUTHINFO USER {0}", user);            
+            if(result.Code != 381) {
+                throw new Exception(result.Message);
+            }
             
+            result = WriteLine("AUTHINFO PASS {0}", pass);            
             if(!result.IsGood) {
                 throw new Exception(result.Message);
             }
@@ -165,49 +162,30 @@ namespace NntpClient {
         /// <param name="articleId"></param>
         /// <returns></returns>
         public Article GetArticle(string articleId) {
+            IBinaryDecoder decoder;
             var result = WriteLine("ARTICLE <{0}>", articleId.WithoutBrackets());
-            string line = null;
 
             if(result.IsGood) {
-                var dict = ReadHeader();                
-                var yHeaderDict = ReadYEncHeader();
-                int size = 0, total = 1;
-
-                if(yHeaderDict.ContainsKey("begin") && yHeaderDict.ContainsKey("end")) {
-                    size = (yHeaderDict["end"].AsInt32() - yHeaderDict["begin"].AsInt32()) + 1;
-                }
-
-                if(yHeaderDict.ContainsKey("total")) {
-                    total = yHeaderDict["total"].AsInt32();
-                }
+                var dict = ReadHeader();
                 
-                string name = yHeaderDict["name"];
-                int part = yHeaderDict["part"].AsInt32();
+                if(dict["Subject"].Contains("yEnc"))
+                    decoder = new YEncDecoder(sr);
+                else
+                    decoder = new Uudecoder(sr);
 
-                MemoryStream ms = new MemoryStream();
-                while(!(line = ReadLine()).StartsWith("=yend")) {
-                    YEncDecode(line, ms);
-                    DownloadedChunk(this, new DownloadProgressEventArgs(ms.Length, size, name, part, total));
-                }
-                ms.Position = 0;
-
-                Crc32 crc = new Crc32();
-                var yFooterDict = ParseYEncKeywordLine(line);
-                string expectedHash = yFooterDict["pcrc32"];
-                string crcHash = string.Empty;
-                crcHash = crc.ComputeHash(ms).Aggregate(crcHash, (a, c) => a += c.ToString("x2"));
-                ms.Position = 0;
-                ReadLine();
+                decoder.Decode(
+                    d => DownloadedChunk(this, new DownloadProgressEventArgs(d.BytesRead, d.Size, d.Filename, d.Part, d.TotalParts))
+                );
 
                 return new Article {
                     Headers = dict,
-                    Body = ms,
-                    Filename = name,
-                    Part = part,
-                    TotalParts = total,
-                    ExpectedCrc32 = expectedHash,
-                    ActualCrc32 = crcHash,
-                    Start = yHeaderDict["begin"].AsInt32() - 1
+                    Body = decoder.Result,
+                    Filename = decoder.Filename,
+                    Part = decoder.Part,
+                    TotalParts = decoder.TotalParts,
+                    ExpectedCrc32 = decoder.ExpectedCrc32,
+                    ActualCrc32 = decoder.ActualCrc32,
+                    Start = decoder.ByteOffset
                 };
             }
 
@@ -235,24 +213,6 @@ namespace NntpClient {
             return result.IsGood;
         }
 
-        private Dictionary<string, string> ReadYEncHeader() {
-            string ybegin = string.Empty, ypart = string.Empty;
-            List<Dictionary<string, string>> dicts = new List<Dictionary<string, string>>();
-            
-            ybegin = ReadLine();
-            dicts.Add(ParseYEncKeywordLine(ybegin));
-
-            if(PeekLine().StartsWith("=ypart")) {
-                ypart = ReadLine();
-                dicts.Add(ParseYEncKeywordLine(ypart));
-            }
-
-            return dicts.SelectMany(d => d).ToDictionary(k => k.Key, v => v.Value);
-        }
-        private Dictionary<string, string> ParseYEncKeywordLine(string header) {
-            var mc = Regex.Matches(header, PATTERN_YENC_HEADER, RegexOptions.Singleline | RegexOptions.Compiled | RegexOptions.RightToLeft);
-            return mc.OfType<Match>().ToDictionary(k => k.Groups["key"].Value, v => v.Groups["value"].Value);
-        }
         private void CleanUp() {            
             if(sr != null && sw != null) {
                 sr.Close();
@@ -268,12 +228,7 @@ namespace NntpClient {
             WriteLine("MODE {0}", mode);
         }
         private string ReadLine() {
-            string line = peekedLine ?? sr.ReadLine();
-            peekedLine = null;
-            return line;
-        }
-        private string PeekLine() {
-            return peekedLine ?? (peekedLine = sr.ReadLine());
+            return sr.ReadLine();
         }
         private ServerReply WriteLine(string line, params object[] args) {
             sw.WriteLine(line, args);
@@ -291,29 +246,7 @@ namespace NntpClient {
                 dict[key] = value.Trim();
             }
 
-            if(header == string.Empty) {
-                // some messages have more than 1 blank line between the headers & body, go figure
-                while(PeekLine() == string.Empty)
-                    ReadLine();
-            }
-
             return dict;
-        }
-        private void YEncDecode(string line, Stream destination) {
-            byte[] raw = enc.GetBytes(line);
-            byte[] decoded = new byte[line.Length];
-            int length = 0;
-
-            for(int i = (raw[0] == 0x2e && raw[1] == 0x2e) ? 1 : 0; i < raw.Length; i++) {
-                if(raw[i] == '=') {
-                    i++;
-                    decoded[length++] = (byte)((raw[i] - 0x40) - 0x2a);
-                } else {
-                    decoded[length++] = (byte)(raw[i] - 0x2a);
-                }
-            }
-
-            destination.Write(decoded, 0, length);
         }
 
         /// <summary>
