@@ -1,1 +1,1 @@
-Quick & dirty usenet client, will decode yEnc encoded binaries
+Quick & dirty usenet client library, will decode yEnc & UUE encoded binaries
