@@ -10,19 +10,14 @@ namespace NntpClient.Testing {
     class Program {
         static void Main(string[] args) {
             var padLock = new object();
-            var settings = ConfigurationManager.AppSettings;
-            string hostname = settings["NntpHost"],
-                   user = settings["NntpUser"],
-                   pass = settings["NntpPass"];
-            int port = int.Parse(settings["NntpPort"]);
-
-            NzbDocument nzb = new NzbDocument(settings["NntpNzb"]);
-            DownloadQueue queue = new DownloadQueue(nzb, settings["NntpCachePath"], settings["NntpCompletedPath"]);
+            dynamic settings = new Settings();
+            NzbDocument nzb = new NzbDocument(settings.Nzb);
+            DownloadQueue queue = new DownloadQueue(nzb, settings.CachePath, settings.CompletedPath);
 
             queue.FileCompleted += (s, e) => {
                 lock(padLock) {
                     Console.SetCursorPosition(0, 21);
-                    Console.Write("[{0:MM/dd/yyyy hh:mm}] File Completed ({1,-102})", DateTime.Now, Path.GetFileName(e.Filename));
+                    Console.Write("[{0:MM/dd/yyyy hh:mm}] File Completed {1,-96}", DateTime.Now, Path.GetFileName(e.Filename));
                 }
             };
 
@@ -35,8 +30,9 @@ namespace NntpClient.Testing {
                         
             Console.SetWindowSize(130, 25);
             Console.SetBufferSize(130, 25);
-            int maxConnections = int.Parse(settings["NntpMaxConnections"]);
-            Task[] tasks = new Task[maxConnections];
+
+            Task[] tasks = new Task[settings.MaxConnections];
+
             for(int i = 0; i < tasks.Length; i++) {
                 tasks[i] = new Task((j) => {
                     while(queue.HasJobs) {
@@ -44,8 +40,8 @@ namespace NntpClient.Testing {
 
                         if(item != null) {
                             using(var nntp = new Client()) {
-                                nntp.Connect(hostname, port, true);
-                                nntp.Authenticate(user, pass);
+                                nntp.Connect(settings.Host, settings.Port, true);
+                                nntp.Authenticate(settings.User, settings.Pass);
                                 nntp.DownloadedChunk += (s, e) => {
                                     lock(padLock) {
                                         Console.SetCursorPosition(0, (int)j);
@@ -62,9 +58,9 @@ namespace NntpClient.Testing {
                         }
                     }
                 }, i);
-                tasks[i].Start();
             }
-
+            
+            Parallel.ForEach(tasks, task => task.Start());
             Task.WaitAll(tasks);
             Console.SetCursorPosition(0, 22);
             Console.WriteLine("All segments have been downloaded.");
