@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Article.cs" />
+    <Compile Include="Connection.cs" />
     <Compile Include="Decoders\BinaryDecoder.cs" />
     <Compile Include="Decoders\IBinaryDecoder.cs" />
     <Compile Include="Decoders\Uudecoder.cs" />

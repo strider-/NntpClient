@@ -6,23 +6,11 @@ using System.IO;
 
 namespace NntpClient.Decoders {
     internal abstract class BinaryDecoder : IBinaryDecoder {
-        string peekLine;
-
-        public BinaryDecoder(StreamReader reader) {
-            Reader = reader;
+        public BinaryDecoder(Connection conn) {
+            Connection = conn;
             // some messages have multiple blank lines between the header & message body
-            while(PeekLine() == string.Empty)
-                ReadLine();
-        }
-
-        protected string ReadLine() {
-            string line = peekLine ?? Reader.ReadLine();
-            peekLine = null;
-            return line;
-        }
-
-        protected string PeekLine() {
-            return peekLine ?? (peekLine = Reader.ReadLine());
+            while(conn.PeekLine() == string.Empty)
+                conn.ReadLine();
         }
 
         protected string GetCrc32() {
@@ -35,7 +23,7 @@ namespace NntpClient.Decoders {
 
         public abstract void Decode(Action<IBinaryDecoder> OnChunkDownloaded);
 
-        protected StreamReader Reader { get; private set; }
+        protected Connection Connection { get; private set; }
 
         public abstract MemoryStream Result { 
             get; 

@@ -27,7 +27,7 @@ namespace NntpClient.Testing {
                     Console.WriteLine("[{0:MM/dd/yyyy hh:mm}] {1,-117}", DateTime.Now, "Queue Completed");
                 }
             };
-                        
+
             Console.SetWindowSize(130, 25);
             Console.SetBufferSize(130, 25);
 

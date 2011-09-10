@@ -17,10 +17,8 @@ namespace NntpClient {
     /// <summary>
     /// Connects &amp; performs operations on a usenet server.
     /// </summary>
-    public class Client : IDisposable {        
-        TcpClient client;
-        StreamReader sr;
-        StreamWriter sw;
+    public class Client : IDisposable {
+        Connection conn;
         
         /// <summary>
         /// Fired when an article could not be found on the server
@@ -34,9 +32,7 @@ namespace NntpClient {
         /// <summary>
         /// Creates a new intance of the client.
         /// </summary>
-        public Client() {
-            client = new TcpClient();            
-        }
+        public Client() {  }
         /// <summary>
         /// Opens a connection to the given usenet server on the specified port, and whether or not to use ssl.
         /// </summary>
@@ -44,21 +40,8 @@ namespace NntpClient {
         /// <param name="port">Port to connect on</param>
         /// <param name="ssl">Uses a secure connection if true</param>
         public void Connect(string hostname, int port, bool ssl) {            
-            client.Connect(hostname, port);
-            Stream stream = client.GetStream();
-            
-            if(ssl) {
-                SslStream sslStream = new SslStream(client.GetStream(), true);
-                sslStream.AuthenticateAsClient(hostname);
-                stream = sslStream;
-            }
-
-            var enc = Encoding.GetEncoding(1252);
-            sr = new StreamReader(stream, enc);
-            sw = new StreamWriter(stream, enc);
-            sw.AutoFlush = true;
-
-            var reply = ServerReply.Parse(ReadLine());
+            conn = new Connection(hostname, port, ssl);
+            var reply = ServerReply.Parse(conn.ReadLine());
             Connected = reply.IsGood;
         }
         /// <summary>
@@ -67,7 +50,7 @@ namespace NntpClient {
         /// <returns></returns>
         public ConnectionResult Close() {
             if(Connected) {
-                string msg = WriteLine("QUIT").Message;
+                string msg = conn.WriteLine("QUIT").Message;
                 var result = ConnectionResult.Parse(msg);
 
                 CleanUp();
@@ -88,12 +71,12 @@ namespace NntpClient {
         /// <param name="pass">Usenet password</param>
         /// <returns></returns>
         public void Authenticate(string user, string pass) {
-            var result = WriteLine("AUTHINFO USER {0}", user);            
+            var result = conn.WriteLine("AUTHINFO USER {0}", user);            
             if(result.Code != 381) {
                 throw new Exception(result.Message);
             }
-            
-            result = WriteLine("AUTHINFO PASS {0}", pass);            
+
+            result = conn.WriteLine("AUTHINFO PASS {0}", pass);            
             if(!result.IsGood) {
                 throw new Exception(result.Message);
             }
@@ -109,9 +92,9 @@ namespace NntpClient {
             var groups = new List<Group>();
             string group;
 
-            var reply = WriteLine("LIST");
+            var reply = conn.WriteLine("LIST");
 
-            while((group = ReadLine()) != ".") {
+            while((group = conn.ReadLine()) != ".") {
                 groups.Add(Group.Parse(group));
             }
 
@@ -123,7 +106,7 @@ namespace NntpClient {
         /// <param name="groupName"></param>
         /// <returns></returns>
         public bool SetGroup(string groupName) {
-            var result = WriteLine("GROUP {0}", groupName);
+            var result = conn.WriteLine("GROUP {0}", groupName);
 
             if(result.IsGood) {
                 CurrentGroup = groupName;
@@ -147,7 +130,7 @@ namespace NntpClient {
         /// <returns></returns>
         public Dictionary<string, string> GetHeaders(string articleId) {
             var dict = new Dictionary<string, string>();
-            var result = WriteLine("HEAD <{0}>", articleId.WithoutBrackets());
+            var result = conn.WriteLine("HEAD <{0}>", articleId.WithoutBrackets());
 
             if(result.IsGood) {
                 return ReadHeader();
@@ -163,15 +146,15 @@ namespace NntpClient {
         /// <returns></returns>
         public Article GetArticle(string articleId) {
             IBinaryDecoder decoder;
-            var result = WriteLine("ARTICLE <{0}>", articleId.WithoutBrackets());
+            var result = conn.WriteLine("ARTICLE <{0}>", articleId.WithoutBrackets());
 
             if(result.IsGood) {
                 var dict = ReadHeader();
                 
                 if(dict["Subject"].Contains("yEnc"))
-                    decoder = new YEncDecoder(sr);
+                    decoder = new YEncDecoder(conn);
                 else
-                    decoder = new Uudecoder(sr);
+                    decoder = new Uudecoder(conn);
 
                 decoder.Decode(
                     d => DownloadedChunk(this, new DownloadProgressEventArgs(d.BytesRead, d.Size, d.Filename, d.Part, d.TotalParts))
@@ -197,7 +180,7 @@ namespace NntpClient {
         /// </summary>
         /// <returns></returns>
         public DateTime Date() {
-            var reply = WriteLine("DATE");
+            var reply = conn.WriteLine("DATE");
             if(reply.IsGood) {
                 return DateTime.ParseExact(reply.Message, "yyyyMMddHHmmss", CultureInfo.CurrentCulture);
             }
@@ -209,38 +192,23 @@ namespace NntpClient {
         /// <param name="articleId">Message-ID of the article</param>
         /// <returns></returns>
         public bool ArticleExists(string articleId) {
-            var result = WriteLine("STAT <{0}>", articleId.WithoutBrackets());
+            var result = conn.WriteLine("STAT <{0}>", articleId.WithoutBrackets());
             return result.IsGood;
         }
 
-        private void CleanUp() {            
-            if(sr != null && sw != null) {
-                sr.Close();
-                sr = null;
-                sw.Close();
-                sw = null;
-                client.Close();
-            }
+        private void CleanUp() {
+            conn.Dispose();
             Connected = false;
             Authenticated = false;
         }
         private void SetMode(string mode) {
-            WriteLine("MODE {0}", mode);
-        }
-        private string ReadLine() {
-            return sr.ReadLine();
-        }
-        private ServerReply WriteLine(string line, params object[] args) {
-            sw.WriteLine(line, args);
-            string result = ReadLine();
-            var reply = ServerReply.Parse(result);
-            return reply;
+            conn.WriteLine("MODE {0}", mode);
         }
         private Dictionary<string, string> ReadHeader() {
             var dict = new Dictionary<string, string>();
             string header = null;
 
-            while((header = ReadLine()) != string.Empty && header != ".") {                
+            while((header = conn.ReadLine()) != string.Empty && header != ".") {                
                 string key = header.Substring(0, header.IndexOf(':'));
                 string value = header.Substring(header.IndexOf(':') + 1);
                 dict[key] = value.Trim();

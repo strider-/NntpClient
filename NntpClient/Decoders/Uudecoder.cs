@@ -9,19 +9,19 @@ namespace NntpClient.Decoders {
         MemoryStream destination;
         string crc32, name;
 
-        public Uudecoder(StreamReader reader)
-            : base(reader) {
+        public Uudecoder(Connection conn)
+            : base(conn) {
             destination = new MemoryStream();
-            string header = ReadLine();
+            string header = Connection.ReadLine();
             name = header.Substring(10);
         }
 
         public override void Decode(Action<IBinaryDecoder> OnChunkDownloaded) {
             string line;
-            while((line = ReadLine()) != ".") {
+            while((line = Connection.ReadLine()) != ".") {
                 if(line == "`" || line == "end" || string.IsNullOrWhiteSpace(line))
                     continue;
-                byte[] raw = Reader.CurrentEncoding.GetBytes(line);
+                byte[] raw = Connection.Encoding.GetBytes(line);
                 int length = raw[0] - 32;
                 int pos = 1, written = 0;
 

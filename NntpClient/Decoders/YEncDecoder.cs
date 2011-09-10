@@ -14,8 +14,8 @@ namespace NntpClient.Decoders {
         MemoryStream destination;
         string expectedCrc32, actualCrc32;
 
-        public YEncDecoder(StreamReader reader)
-            : base(reader) {
+        public YEncDecoder(Connection conn)
+            : base(conn) {
                 destination = new MemoryStream();
                 ReadHeader();
         }
@@ -24,11 +24,11 @@ namespace NntpClient.Decoders {
             string ybegin = string.Empty, ypart = string.Empty;
             List<Dictionary<string, string>> dicts = new List<Dictionary<string, string>>();
 
-            ybegin = ReadLine();
+            ybegin = Connection.ReadLine();
             dicts.Add(ParseYEncKeywordLine(ybegin));
 
-            if(PeekLine().StartsWith("=ypart")) {
-                ypart = ReadLine();
+            if(Connection.PeekLine().StartsWith("=ypart")) {
+                ypart = Connection.ReadLine();
                 dicts.Add(ParseYEncKeywordLine(ypart));
             }
 
@@ -55,8 +55,8 @@ namespace NntpClient.Decoders {
 
         public override void Decode(Action<IBinaryDecoder> OnChunkDownloaded) {                        
             string line;
-            while(!(line = ReadLine()).StartsWith("=yend")) {
-                byte[] raw = Reader.CurrentEncoding.GetBytes(line);
+            while(!(line = Connection.ReadLine()).StartsWith("=yend")) {
+                byte[] raw = Connection.Encoding.GetBytes(line);
                 byte[] decoded = new byte[line.Length];
                 int length = 0;
 
@@ -81,7 +81,7 @@ namespace NntpClient.Decoders {
             if(!string.IsNullOrWhiteSpace(expectedCrc32))
                 expectedCrc32 = expectedCrc32.ToLower();
 
-            ReadLine();
+            Connection.ReadLine();
         }
 
         public override MemoryStream Result {
