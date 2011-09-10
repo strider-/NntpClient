@@ -16,8 +16,8 @@ namespace NntpClient.Decoders {
 
         public YEncDecoder(StreamReader reader)
             : base(reader) {
-            ReadHeader();
-            destination = new MemoryStream();
+                destination = new MemoryStream();
+                ReadHeader();
         }
 
         private void ReadHeader() {
@@ -53,7 +53,7 @@ namespace NntpClient.Decoders {
             return 0;
         }
 
-        public override void Decode(Action<IBinaryDecoder> OnChunkDownloaded) {
+        public override void Decode(Action<IBinaryDecoder> OnChunkDownloaded) {                        
             string line;
             while(!(line = ReadLine()).StartsWith("=yend")) {
                 byte[] raw = Reader.CurrentEncoding.GetBytes(line);

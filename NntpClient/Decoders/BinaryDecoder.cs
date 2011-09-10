@@ -14,6 +14,7 @@ namespace NntpClient.Decoders {
             while(PeekLine() == string.Empty)
                 ReadLine();
         }
+
         protected string ReadLine() {
             string line = peekLine ?? Reader.ReadLine();
             peekLine = null;
