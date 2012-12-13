@@ -23,7 +23,7 @@ namespace NntpClient.Nzb {
 
         private XDocument Validate(XDocument nzbDoc) {
             var settings = new XmlReaderSettings {
-                ValidationType = ValidationType.DTD,
+                ValidationType = ValidationType.Schema,
                 DtdProcessing = DtdProcessing.Parse
             };
             XmlReader r = XmlReader.Create(new StringReader(nzbDoc.ToString()), settings);

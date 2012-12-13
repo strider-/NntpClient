@@ -74,9 +74,11 @@ namespace NntpClient.Decoders {
             destination.Position = 0;
 
             var yFooterDict = ParseYEncKeywordLine(line);
+            var keys = new string[] { "pcrc32", "crc32", "crc" };
+            var crcKey = yFooterDict.First(kvp => yFooterDict.ContainsKey(kvp.Key)).Key;
             
             actualCrc32 = GetCrc32();
-            expectedCrc32 = yFooterDict["pcrc32"];
+            expectedCrc32 = yFooterDict[crcKey];
 
             if(!string.IsNullOrWhiteSpace(expectedCrc32))
                 expectedCrc32 = expectedCrc32.ToLower();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -23,7 +23,6 @@ namespace NntpClient {
             File.WriteAllBytes(location, Body.ToArray());
             Body.Close();
             Body.Dispose();
-            
             return location;
         }
         /// <summary>

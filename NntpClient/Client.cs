@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Net.Sockets;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Security;
 using System.Text.RegularExpressions;
 using System.Globalization;
@@ -124,7 +125,7 @@ namespace NntpClient {
             return SetGroup(group.Name);
         }
         /// <summary>
-        /// Fetches only the headers of an article with the given ID.
+        /// Fetches only the headers of a message with the given ID.
         /// </summary>
         /// <param name="articleId"></param>
         /// <returns></returns>
@@ -139,6 +140,26 @@ namespace NntpClient {
             ArticleNotFound(this, new ArticleNotFoundEventArgs(result, articleId));
             return null;
         }
+
+        /// <summary>
+        /// Fetches overview database information from a group within a given range of article ids.
+        /// A call to SetGroup must be made before calling this method or it will fail.
+        /// </summary>
+        /// <param name="range">"ArticleId", "ArticleId-" (all articles after this id), or "ArticleId-ArticleId".</param>
+        /// <returns></returns>
+        public IEnumerable<Overview> GetXOverview(string range)
+        {
+            var result = conn.WriteLine("XZVER {0}", range);
+            if(result.IsGood)
+            {
+                var decoder = new YEncDecoder(conn);
+                decoder.Decode((d) => { });                
+                var stream = new DeflateStream(decoder.Result, CompressionMode.Decompress);
+                var headers = new StreamReader(stream).ReadToEnd();
+                return headers.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries).Select(h => new Overview(h));
+            }
+            return null;
+        }
         /// <summary>
         /// Downloads an article from usenet with the given ID. Returns null if the article could not be found.
         /// </summary>
@@ -150,11 +171,11 @@ namespace NntpClient {
 
             if(result.IsGood) {
                 var dict = ReadHeader();
-                
-                if(dict["Subject"].Contains("yEnc"))
-                    decoder = new YEncDecoder(conn);
-                else
-                    decoder = new Uudecoder(conn);
+
+                decoder = DecoderFactory.DetermineDecoder(conn);
+                if(decoder == null) {
+                    throw new Exception("Unable to determine binary post encoding.");
+                }
 
                 decoder.Decode(
                     d => DownloadedChunk(this, new DownloadProgressEventArgs(d.BytesRead, d.Size, d.Filename, d.Part, d.TotalParts))

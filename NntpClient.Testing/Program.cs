@@ -1,17 +1,26 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Configuration;
 using NntpClient.Nzb;
 using NntpClient.Queue;
 using System.IO;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace NntpClient.Testing {
     class Program {
         static void Main(string[] args) {
+            QueueTest();
+        }
+
+        static void QueueTest() {
             var padLock = new object();
             dynamic settings = new Settings();
-            NzbDocument nzb = new NzbDocument(settings.Nzb);
+            var nntp = new Client();
+            nntp.Connect(settings.Host, settings.Port, true);
+            nntp.Authenticate(settings.User, settings.Pass);
+            /*
+            NzbDocument nzb = new NzbDocument(settings.Nzb);        
             DownloadQueue queue = new DownloadQueue(nzb, settings.CachePath, settings.CompletedPath);
 
             queue.FileCompleted += (s, e) => {
@@ -27,10 +36,10 @@ namespace NntpClient.Testing {
                     Console.WriteLine("[{0:MM/dd/yyyy hh:mm}] {1,-117}", DateTime.Now, "Queue Completed");
                 }
             };
-
+            
             Console.SetWindowSize(130, 25);
             Console.SetBufferSize(130, 25);
-
+            
             Task[] tasks = new Task[settings.MaxConnections];
 
             for(int i = 0; i < tasks.Length; i++) {
@@ -59,12 +68,13 @@ namespace NntpClient.Testing {
                     }
                 }, i);
             }
-            
+
             Parallel.ForEach(tasks, task => task.Start());
             Task.WaitAll(tasks);
             Console.SetCursorPosition(0, 22);
             Console.WriteLine("All segments have been downloaded.");
             Console.ReadLine();
+            */
         }
     }
 }

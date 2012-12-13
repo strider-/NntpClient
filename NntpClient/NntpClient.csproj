@@ -44,6 +44,7 @@
   <ItemGroup>
     <Compile Include="Article.cs" />
     <Compile Include="Connection.cs" />
+    <Compile Include="Decoders\DecoderFactory.cs" />
     <Compile Include="Decoders\BinaryDecoder.cs" />
     <Compile Include="Decoders\IBinaryDecoder.cs" />
     <Compile Include="Decoders\Uudecoder.cs" />
@@ -60,6 +61,7 @@
     <Compile Include="Nzb\NzbDocument.cs" />
     <Compile Include="Nzb\NzbFile.cs" />
     <Compile Include="Nzb\NzbSegment.cs" />
+    <Compile Include="Overview.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Queue\DownloadQueue.cs" />
     <Compile Include="Queue\Job.cs" />
