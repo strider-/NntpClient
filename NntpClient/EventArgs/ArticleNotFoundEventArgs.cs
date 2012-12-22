@@ -8,14 +8,19 @@ namespace NntpClient.EventArgs {
     /// Contains data pertaining to a missing usenet article
     /// </summary>
     public class ArticleNotFoundEventArgs : NntpClientEventArgs {
-        internal ArticleNotFoundEventArgs(ServerReply reply, string articleId)
+        internal ArticleNotFoundEventArgs(ServerReply reply, string messageId, ulong articleId)
             : base(reply) {
-                ArticleId = articleId;
+                MessageId = messageId;
         }
 
         /// <summary>
-        /// Gets the message-id that was not found
+        /// Gets the message-id that was not found, if attempting to grab by message-id
         /// </summary>
-        public string ArticleId { get; private set; }
+        public string MessageId { get; private set; }
+
+        /// <summary>
+        /// Gets the article id that was not found, if attempting to grab by article id
+        /// </summary>
+        public ulong ArticleId { get; private set; }
     }
 }

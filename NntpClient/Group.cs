@@ -41,6 +41,10 @@ namespace NntpClient {
         /// </summary>
         public ulong FirstArticle { get; internal set; }
         /// <summary>
+        /// Gets the number of articles in the group.
+        /// </summary>
+        public ulong ArticleCount { get { return (LastArticle - FirstArticle) - 1; } }
+        /// <summary>
         /// Gets whether or not posting is allowed in this group.
         /// </summary>
         public bool IsPostingAllowed { get; internal set; }

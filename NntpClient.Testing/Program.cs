@@ -17,8 +17,10 @@ namespace NntpClient.Testing {
             var padLock = new object();
             dynamic settings = new Settings();
             var nntp = new Client();
+            
             nntp.Connect(settings.Host, settings.Port, true);
             nntp.Authenticate(settings.User, settings.Pass);
+                        
             /*
             NzbDocument nzb = new NzbDocument(settings.Nzb);        
             DownloadQueue queue = new DownloadQueue(nzb, settings.CachePath, settings.CompletedPath);
